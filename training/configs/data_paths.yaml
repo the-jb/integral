@@ -1,0 +1,20 @@
+# Dataset name -> directory. The training code reads every dataset path from this file
+# (`data_pipeline.data_paths.dataset_path`); set the values to where the datasets are on your machine.
+
+# vision tokenizer training: DataComp-1B (stage main and gan), BLIP-3o long captions and rendered text (stage main);
+# eval on ImageNet-1K validation
+datacomp-1b: /workspace/data/datacomp-1b
+imagenet-1k: /workspace/data/imagenet-1k
+rendered-text: /workspace/data/rendered-text
+
+# visual generation training (and its eval set, BLIP-3o)
+blip3o-long-caption: /workspace/data/blip3o-pretrain-long-caption
+blip3o-short-caption: /workspace/data/blip3o-short-caption
+echo-4o-image: /workspace/data/Echo-4o-Image
+gpt-image-edit: /workspace/data/GPT-Image-Edit-1.5M/gpt-edit
+textsculpt: /workspace/data/TextSculpt-Data
+zebra-cot: /workspace/data/Zebra-CoT
+# These three are read as webdataset tars re-sharded from the released archives (`sources.py` describes the layout).
+nano150k: /workspace/data/Nano-consistent-150k-wds
+opengpt4o: /workspace/data/OpenGPT-4o-Image-wds
+scaleedit: /workspace/data/ScaleEdit-12M-wds

@@ -1,0 +1,35 @@
+# accelerate config for vision tokenizer training, stage `main`: FSDP2 on 1 node x 8 GPUs.
+#
+# fsdp_reshard_after_forward: false -> gradients and optimizer state are sharded, parameters stay gathered after
+#   forward.
+# fsdp_transformer_layer_cls_to_wrap: IntegralTransformerBlock, the block of the abstraction fusion and of the pixel
+#   decoder.
+# fsdp_ignored_modules: regex over named_modules(). Only frozen modules may go here -- an ignored module is neither
+#   sharded nor gradient-reduced: the vision tower, the distillation target's patch merger and LPIPS (kept in fp32).
+# fsdp_state_dict_type: FULL_STATE_DICT keeps checkpoints in the single-file layout tools/export_vision_tokenizer.py
+#   and `--resume_from_checkpoint` read.
+compute_environment: LOCAL_MACHINE
+debug: false
+distributed_type: FSDP
+enable_cpu_affinity: false
+gpu_ids: all
+machine_rank: 0
+main_training_function: main
+num_machines: 1
+num_processes: 8
+rdzv_backend: static
+same_network: true
+tpu_env: []
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false
+fsdp_config:
+  fsdp_version: 2
+  fsdp_reshard_after_forward: false
+  fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
+  fsdp_transformer_layer_cls_to_wrap: IntegralTransformerBlock
+  fsdp_ignored_modules: '^model\.visual($|\.)|^teacher_merger($|\.)|^lpips($|\.)'
+  fsdp_state_dict_type: FULL_STATE_DICT
+  fsdp_cpu_ram_efficient_loading: false
+  fsdp_sync_module_states: true
+  fsdp_activation_checkpointing: false

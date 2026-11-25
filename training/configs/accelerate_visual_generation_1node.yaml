@@ -1,0 +1,26 @@
+# accelerate config for visual generation training on 1 node x 8 GPUs: FSDP2, activation checkpointing.
+# See accelerate_visual_generation_hsdp8.yaml for the wrap / ignore / state dict choices, which are the same.
+compute_environment: LOCAL_MACHINE
+debug: false
+distributed_type: FSDP
+enable_cpu_affinity: false
+gpu_ids: all
+machine_rank: 0
+main_training_function: main
+num_machines: 1
+num_processes: 8
+rdzv_backend: static
+same_network: true
+tpu_env: []
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false
+fsdp_config:
+  fsdp_version: 2
+  fsdp_reshard_after_forward: false
+  fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
+  fsdp_transformer_layer_cls_to_wrap: IntegralVisualGenerationBlock,IntegralFlowHeadBlock,IntegralDecoderLayer
+  fsdp_state_dict_type: FULL_STATE_DICT
+  fsdp_cpu_ram_efficient_loading: false
+  fsdp_sync_module_states: true
+  fsdp_activation_checkpointing: true

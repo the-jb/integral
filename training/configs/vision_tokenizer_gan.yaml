@@ -1,0 +1,65 @@
+# Vision tokenizer training, stage `gan`: the pixel decoder alone against a DINO discriminator. 8 GPUs.
+#
+#   STAGE=gan CONFIG=configs/vision_tokenizer_gan.yaml TOKENIZER=<stage-main tokenizer dir> bash scripts/train_vision_tokenizer.sh
+#
+# Trains `pixel_decoder` and nothing else. The vision tower, abstraction fusion, bottleneck, merger and visual
+# generation adapter are frozen and in eval mode, so the latent is the posterior mean and the merger's output equals
+# the starting tokenizer's; eval's distill_mse / distill_cos check that (they stay constant). Output:
+# <hf_pretrained>/gan-<YYYYmmdd_HHMMSS>/; tools/merge_gan_decoder.py writes the tokenizer with the new pixel decoder.
+
+job_name: vision-tokenizer-gan
+project: integral-vision-tokenizer
+
+# The tokenizer being tuned (an IntegralVisionTokenizer directory); the launcher passes it (TOKENIZER).
+hf_pretrained: null
+# the Qwen3.5 model whose patch merger is the target of the eval's distillation check
+vision_model_path: Qwen/Qwen3.5-9B
+
+# training images: DataComp-1B, eval: ImageNet-1K validation (both from configs/data_paths.yaml)
+resolution: 256
+
+# reconstruction
+recl1_weight: 1.0
+lpips_weight: 1.0
+
+# GAN: hinge loss for the discriminator, vanilla for the generator, the adaptive weight measured at the pixel decoder's
+# last layer. The discriminator trains from step 0; the generator's GAN loss starts at step 5,000.
+gan_weight: 0.5
+adaptive_weight: true
+max_d_weight: 1.0e4
+disc_loss: hinge
+gen_loss: vanilla
+# the DINO ViT-S/8 weights the discriminator is built on: a Hugging Face repo id (the launcher downloads it once,
+# before the training processes start), or a local .safetensors / .pth file
+disc_ckpt: timm/vit_small_patch8_224.dino
+disc_recipe: S_8
+disc_ks: 9
+disc_lr: 2.0e-5
+disc_weight_decay: 0.0
+disc_upd_start_step: 0
+gan_start_step: 5000
+
+# No gradient accumulation: the discriminator updates once per generator step. 32 x 8 GPUs = 256 images a step.
+per_device_train_batch_size: 32
+learning_rate: 2.0e-5
+weight_decay: 0.0
+adam_beta1: 0.9
+adam_beta2: 0.95
+lr_scheduler_type: constant
+max_grad_norm: 1.0
+max_steps: 100000
+bf16: true
+seed: 0
+
+# eval on the full ImageNet-1K validation set (psnr / ssim / rFID and the distillation check) at every checkpoint
+save_steps: 10000
+eval_steps: 10000
+logging_steps: 10
+# an image reconstructed every demo_steps (null = no demo)
+demo_image: null
+demo_steps: 500
+demo_resolution: [256, 256]
+eval_on_start: true
+
+dataloader_num_workers: 4
+dataloader_prefetch_factor: 4

@@ -1,0 +1,156 @@
+# Visual generation SFT of an Integral model, the vision-language model trained too.
+#
+# Trains the visual generation model, the vision tokenizer's visual generation adapter and merger, the language model
+# and its head, with cross-entropy on the supervised text and the generation markers. Otherwise identical to
+# visual_generation_frozen.yaml. 8 nodes x 8 GPUs (configs/accelerate_visual_generation_hsdp8.yaml).
+#
+#   NODES=8 CONFIG=configs/visual_generation_unfrozen.yaml MODEL_PATH=<Integral directory> bash scripts/train_visual_generation.sh
+
+job_name: visual-generation-unfrozen
+project: integral-visual-generation
+
+# The Integral directory to start from; the launcher passes it (MODEL_PATH).
+model_path: null
+train_language_model: true
+
+# The fixed eval set and its resolution; `instruction` is the text every eval image is asked back with, and the
+# reconstruction sources' text.
+resolution: 512
+t2i_sources: blip3o-long,blip3o-short
+instruction: "Reproduce this image exactly."
+eval_images: 256
+per_device_eval_batch_size: 8
+eval_steps: 5000
+nll_steps: 32
+nll_hutchinson: 1
+
+interleaved:
+  row_len: 6144
+  # dynamic resolution: up to 512 * 512 pixels per image, aspect clamped to 1:2..2:1
+  max_area: 262144
+  ar_clamp: 2.0
+  # caps on a row's targets and on their latents; 0 = off
+  max_targets: 0
+  max_target_latents: 0
+  report_every: 200
+  # the generation marker is a cross-entropy target: the language model learns to open an image. Required with
+  # train_language_model: with it off a row can carry no cross-entropy, and the head would get no gradient from it.
+  supervise_open: true
+  sources:
+    # reconstruction
+    - {name: imagenet-recon,                              share: 0.00034}
+    - {name: blip3o-long-recon,                           share: 0.00033}
+    - {name: blip3o-short-recon,                          share: 0.00033}
+    # editing
+    - {name: gpt-edit-omniedit,                           share: 0.16546}
+    - {name: gpt-edit-complex,                            share: 0.06052}
+    - {name: gpt-edit-ultraedit,                          share: 0.01932}
+    - {name: gpt-edit-omniedit-rewrite,                   share: 0.01932}
+    - {name: gpt-edit-hqedit-generate,                    share: 0.01808}
+    - {name: gpt-edit-hqedit-edit,                        share: 0.01730}
+    - {name: scaleedit-text,                              share: 0.04526}
+    - {name: scaleedit-extract,                           share: 0.01737}
+    - {name: scaleedit-beautify,                          share: 0.00184}
+    - {name: scaleedit-tone,                              share: 0.01435}
+    - {name: scaleedit-bg,                                share: 0.01184}
+    - {name: scaleedit-action,                            share: 0.00780}
+    - {name: scaleedit-comp,                              share: 0.00154}
+    - {name: opengpt4o-edit,                              share: 0.05000}
+    - {name: nano-background,                             share: 0.02628}
+    - {name: nano-action,                                 share: 0.01817}
+    - {name: nano-time-change,                            share: 0.01460}
+    - {name: nano-black-headshot,                         share: 0.01422}
+    - {name: nano-hairstyle,                              share: 0.01287}
+    - {name: nano-sweet-headshot,                         share: 0.01286}
+    # multi-reference
+    - {name: echo4o-multiref-object,                      share: 0.00965}
+    - {name: echo4o-multiref-hum-obj-sce,                 share: 0.00543}
+    - {name: echo4o-multiref-human,                       share: 0.00443}
+    - {name: echo4o-multiref-hum-sce,                     share: 0.00343}
+    - {name: echo4o-multiref-other,                       share: 0.00197}
+    - {name: echo4o-multiref-obj-sce,                     share: 0.00191}
+    - {name: echo4o-multiref-hum-obj,                     share: 0.00118}
+    - {name: opengpt4o-multiref,                          share: 0.00200}
+    # interleaved reasoning
+    - {name: zebra-2d-visual-reasoning-visual-search,      share: 0.00330}
+    - {name: zebra-3d-visual-reasoning-embodied-cot,       share: 0.00249}
+    - {name: zebra-2d-visual-reasoning-visual-jigsaw,      share: 0.00241}
+    - {name: zebra-visual-logic-strategic-games-chess,     share: 0.00225}
+    - {name: zebra-visual-logic-strategic-games-maze,      share: 0.00220}
+    - {name: zebra-3d-visual-reasoning-multi-hop-objects-counting, share: 0.00109}
+    - {name: zebra-scientific-reasoning-graph-algorithms,  share: 0.00109}
+    - {name: zebra-visual-logic-strategic-games-tetris,    share: 0.00109}
+    - {name: zebra-scientific-reasoning-physics,           share: 0.00078}
+    - {name: zebra-3d-visual-reasoning-robot-planning,     share: 0.00076}
+    - {name: zebra-visual-logic-strategic-games-ciphers,   share: 0.00072}
+    - {name: zebra-scientific-reasoning-chemistry,         share: 0.00051}
+    - {name: zebra-visual-logic-strategic-games-rpm,       share: 0.00033}
+    - {name: zebra-visual-logic-strategic-games-checkers,  share: 0.00030}
+    - {name: zebra-visual-logic-strategic-games-connect-four, share: 0.00022}
+    - {name: zebra-visual-logic-strategic-games-arc-agi,   share: 0.00022}
+    - {name: zebra-scientific-reasoning-competitive-programming, share: 0.00013}
+    - {name: zebra-scientific-reasoning-geometry,          share: 0.00011}
+    # text-to-image
+    - {name: echo4o-instruction-following,                share: 0.15458}
+    - {name: echo4o-surreal-fantasy,                      share: 0.08542}
+    - {name: textsculpt-qwen,                             share: 0.06276}
+    - {name: textsculpt-long,                             share: 0.00724}
+    - {name: opengpt4o-style,                             share: 0.02726}
+    - {name: opengpt4o-science,                           share: 0.02612}
+    - {name: opengpt4o-spatial,                           share: 0.01807}
+    - {name: opengpt4o-complex,                           share: 0.01293}
+    - {name: opengpt4o-text,                              share: 0.00562}
+
+# loss weights: cross-entropy per supervised token, flow per target
+w_text: 1.0
+w_img: 1.0
+
+# the prompt
+gen_marker: "<image_gen>\n\nresolution: {h}x{w}\n\n<vision_start>"
+user_template: "Generate an image at {h}x{w}.\n\n{caption}"
+system_prompt: |-
+  You are a multimodal assistant that can both understand and generate images.
+
+  When you are asked for an image, restate the requested size and then open the image,
+  in exactly this form:
+
+  <image_gen>
+
+  resolution: HxW
+
+  <vision_start>
+
+  HxW is the size the request names. The image itself follows <vision_start>.
+
+# flow matching: t = sigmoid(N(0, 1)), shifted with 4.0; the last request's caption dropped with p = 0.1
+logitnorm_mean: 0.0
+logitnorm_std: 1.0
+time_shift: 4.0
+caption_dropout: 0.1
+
+# optimization
+fsdp_fp32_params: true
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 1
+learning_rate: 2e-5
+lr_scheduler_type: constant_with_warmup
+warmup_steps: 500
+weight_decay: 0.01
+max_grad_norm: 1.0
+max_steps: 200000
+reset_state: false
+
+# EMA of the trained weights; eval runs on the EMA and on the trained weights
+ema_decay: 0.999
+ema_warmup: false
+ema_eval: true
+ema_eval_live: true
+
+# checkpoints: written every 1,000 steps, the newest 3 kept whole, the rest kept every 5,000 steps with their optimizer
+save_strategy: steps
+save_steps: 1000
+save_total_limit: 0
+keep_latest: 3
+keep_steps: 5000
+optimizer_steps: 5000
+logging_steps: 50

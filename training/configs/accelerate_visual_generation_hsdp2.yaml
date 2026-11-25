@@ -1,0 +1,30 @@
+# accelerate config for visual generation training on 2 nodes x 8 GPUs: accelerate_visual_generation_hsdp8.yaml with
+# dp_replicate_size 2 (shards within a node, replicas across the two nodes). See that file for the choices, which are
+# the same.
+compute_environment: LOCAL_MACHINE
+debug: false
+distributed_type: FSDP
+enable_cpu_affinity: false
+gpu_ids: all
+machine_rank: 0
+main_training_function: main
+num_machines: 2
+num_processes: 16
+rdzv_backend: static
+same_network: true
+tpu_env: []
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false
+parallelism_config:
+  parallelism_config_dp_replicate_size: 2
+  parallelism_config_dp_shard_size: 8
+fsdp_config:
+  fsdp_version: 2
+  fsdp_reshard_after_forward: false
+  fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
+  fsdp_transformer_layer_cls_to_wrap: IntegralVisualGenerationBlock,IntegralFlowHeadBlock,IntegralDecoderLayer
+  fsdp_state_dict_type: FULL_STATE_DICT
+  fsdp_cpu_ram_efficient_loading: false
+  fsdp_sync_module_states: true
+  fsdp_activation_checkpointing: true

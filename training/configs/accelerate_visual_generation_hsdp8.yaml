@@ -1,0 +1,40 @@
+# accelerate config for visual generation training on 8 nodes x 8 GPUs: hybrid sharding, activation checkpointing.
+#
+# dp_shard_size 8 shards within a node; dp_replicate_size 8 replicates across nodes, so across nodes the gradients
+# are all-reduced. num_processes is the global rank count (dp_replicate_size * dp_shard_size); machine_rank is set
+# per node by the launcher.
+#
+# fsdp_transformer_layer_cls_to_wrap: the visual generation blocks, the flow head blocks and the language model's
+# decoder layers. The modules that stay frozen are not sharded at all: the launcher sets FSDP_IGNORED_MODULES from
+# train_language_model (scripts/train_visual_generation.sh). An ignored module is neither sharded nor gradient-reduced, so
+# only frozen modules may be listed there.
+#
+# fsdp_activation_checkpointing checkpoints the children of every wrapped layer (attention, MLP).
+# FULL_STATE_DICT gathers the checkpoint into one file, loadable at any rank count.
+compute_environment: LOCAL_MACHINE
+debug: false
+distributed_type: FSDP
+enable_cpu_affinity: false
+gpu_ids: all
+machine_rank: 0
+main_training_function: main
+num_machines: 8
+num_processes: 64
+rdzv_backend: static
+same_network: true
+tpu_env: []
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false
+parallelism_config:
+  parallelism_config_dp_replicate_size: 8
+  parallelism_config_dp_shard_size: 8
+fsdp_config:
+  fsdp_version: 2
+  fsdp_reshard_after_forward: false
+  fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
+  fsdp_transformer_layer_cls_to_wrap: IntegralVisualGenerationBlock,IntegralFlowHeadBlock,IntegralDecoderLayer
+  fsdp_state_dict_type: FULL_STATE_DICT
+  fsdp_cpu_ram_efficient_loading: false
+  fsdp_sync_module_states: true
+  fsdp_activation_checkpointing: true

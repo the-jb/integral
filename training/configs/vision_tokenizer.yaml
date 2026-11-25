@@ -1,0 +1,110 @@
+# Vision tokenizer training, stage `main`, on Qwen3.5-9B's vision tower. 8 GPUs (configs/accelerate_vision_tokenizer.yaml).
+#
+#   STAGE=main CONFIG=configs/vision_tokenizer.yaml bash scripts/train_vision_tokenizer.sh
+#
+# The learning-rate schedule below is a segment resumed at step 125,000 (RESUME=<run>/checkpoint-125000,
+# reset_state: true, so the optimizer and the scheduler start fresh): warmup to 1e-4, then cosine down to 1e-5 at
+# step 200,000. The scheduler is built for max_steps from step 0, so num_cycles is the value that reaches min_lr at
+# max_steps from step 125,000; scripts/train_vision_tokenizer.sh checks it against the resume step.
+
+job_name: null
+project: integral-vision-tokenizer
+
+# The Qwen3.5 model whose vision tower the tokenizer runs on (frozen), and whose patch merger is the distillation
+# target.
+vision_model_path: Qwen/Qwen3.5-9B
+# Per-layer statistics of the vision tower's hidden states, from tools/layer_statistics.py.
+layer_statistics: stats/vision_tower_layer_statistics.pt
+
+model_config:
+  # the vision tower (Qwen3.5-9B's)
+  patch_size: 16
+  temporal_patch_size: 2
+  spatial_merge_size: 2
+  vision_hidden_size: 1152
+  vision_intermediate_size: 4304
+  vision_num_attention_heads: 16
+  vision_num_hidden_layers: 27
+  vision_num_position_embeddings: 2304
+  image_mean: [0.5, 0.5, 0.5]
+  image_std: [0.5, 0.5, 0.5]
+  # abstraction fusion: 28 hidden states in groups of 4
+  abstraction_fusion_group_size: 4
+  abstraction_fusion_hidden_size: 1152
+  abstraction_fusion_intermediate_size: 4608
+  abstraction_fusion_num_attention_heads: 16
+  abstraction_fusion_num_hidden_layers: 1
+  # bottleneck and VAE: one 256-channel latent per patch
+  bottleneck_hidden_size: 1152
+  bottleneck_pre_intermediate_size: 4096
+  bottleneck_post_intermediate_size: 4608
+  vae_hidden_size: 2304
+  latent_size: 256
+  # merger: language model input embeddings, one per 2x2 patches
+  merger_hidden_size: 1152
+  merger_intermediate_size: 4608
+  merger_layer_norm_eps: 1.0e-6
+  merger_out_hidden_size: 4096
+  # pixel decoder
+  pixel_decoder_in_hidden_size: 1152
+  pixel_decoder_in_intermediate_size: 4608
+  pixel_decoder_hidden_size: 1152
+  pixel_decoder_intermediate_size: 3072
+  pixel_decoder_num_attention_heads: 16
+  pixel_decoder_num_hidden_layers: 28
+  pixel_decoder_rope_theta: 100.0
+  # visual generation adapter (trained by the visual generation training, frozen here)
+  visual_generation_adapter_head_dim: 256
+  visual_generation_adapter_intermediate_size: 2304
+  visual_generation_adapter_num_key_value_heads: 4
+  visual_generation_adapter_num_layers: 8
+  layer_norm_eps: 1.0e-5
+  initializer_range: 0.02
+
+# Aspect-ratio buckets. 8,192 patches per GPU batch: 32 images at 256px, 14 at 384px, 8 at 512px.
+bucket_config:
+  token_budget: 8192
+  ar_temp: 0.15
+  shuffle_buffer: 5000
+  bucket_classes:
+    - [[256, 256], [224, 288], [288, 224]]
+    - [[384, 384], [320, 448], [448, 320]]
+    - [[512, 512]]
+  sources:
+    - {name: datacomp, share: 0.60, hflip: true}
+    - {name: blip3o-long, share: 0.30, hflip: true}
+    - {name: rendered-text, share: 0.10, hflip: false}
+
+# the eval set's resolution (ImageNet-1K validation, centre crop)
+resolution: 256
+
+# objective
+kl_weight: 1.0e-6
+recl1_weight: 1.0
+lpips_weight: 1.0
+distill_norm: rms
+local_distill_weight: 5.0
+ln_mse_ratio: 0.3
+
+# optimization. The bucket batcher builds the batches, so per_device_train_batch_size is only the Trainer's record.
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 4
+learning_rate: 1.0e-4
+lr_scheduler_type: cosine_with_min_lr
+lr_scheduler_kwargs:
+  min_lr: 1.0e-5
+  num_cycles: 1.338926
+warmup_steps: 500
+weight_decay: 0.01
+max_steps: 200000
+max_grad_norm: 1.0
+reset_state: true
+
+eval_steps: 5000
+save_steps: 5000
+save_total_limit: 10
+# an image reconstructed every demo_steps (null = no demo)
+demo_image: null
+demo_steps: 500
+demo_resolution: [608, 480]
+logging_steps: 10
